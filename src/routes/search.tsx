@@ -1,11 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Search as SearchIcon } from "lucide-react";
 
-import { findLeads, getRateLimit } from "@/lib/leads.functions";
+import { findLeads, getRateLimit } from "@/lib/session-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,8 +17,8 @@ export const Route = createFileRoute("/search")({
 });
 
 function SearchPage() {
-  const findFn = useServerFn(findLeads);
-  const rateFn = useServerFn(getRateLimit);
+  const findFn = findLeads;
+  const rateFn = getRateLimit;
   const qc = useQueryClient();
   const nav = useNavigate();
 

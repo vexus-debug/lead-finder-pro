@@ -1,9 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { Users, Sparkles, Radar, CopyX, Globe2, Zap, Search as SearchIcon, ArrowRight } from "lucide-react";
 
-import { getStats } from "@/lib/leads.functions";
+import { getStats } from "@/lib/session-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -28,7 +27,7 @@ function StatCard({ icon: Icon, label, value, hint }: { icon: typeof Users; labe
 }
 
 function Dashboard() {
-  const fn = useServerFn(getStats);
+  const fn = getStats;
   const { data, isLoading } = useQuery({ queryKey: ["stats"], queryFn: () => fn(), refetchInterval: 15000 });
 
   const s = data ?? { totalLeads: 0, newToday: 0, scanned: 0, duplicates: 0, withWebsite: 0, apiUsed: 0, apiRemaining: 50, apiLimit: 50 };
