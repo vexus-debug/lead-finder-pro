@@ -91,27 +91,39 @@ async function findEmailsViaSerp(query: string): Promise<string[]> {
   }
 }
 
-// Deep lookup: ScrapeGraphAI v2 search.
-async function findEmailsViaScrapeGraphV2(query: string): Promise<string[]> {
+// ScrapeGraphAI v2 helpers — small, fast requests (large numResults times out).
+async function sgaiPost(path: string, body: unknown, timeoutMs = 25_000): Promise<unknown | null> {
   const key = process.env["SCRAPEGRAPH_API_KEY"];
-  if (!key) return [];
+  if (!key) return null;
   try {
-    const res = await fetch("https://v2-api.scrapegraphai.com/api/search", {
+    const res = await fetch(`https://v2-api.scrapegraphai.com/api/${path}`, {
       method: "POST",
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: { "SGAI-APIKEY": key, "Content-Type": "application/json" },
-      body: JSON.stringify({ query, numResults: 15 }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
-      console.error(`ScrapeGraph v2 failed [${res.status}]: ${(await res.text()).slice(0, 300)}`);
-      return [];
+      console.error(`ScrapeGraph ${path} failed [${res.status}]: ${(await res.text()).slice(0, 300)}`);
+      return null;
     }
-    return extractEmails(JSON.stringify(await res.json()));
+    return await res.json();
   } catch (e) {
-    console.error("ScrapeGraph v2 lookup failed", e);
-    return [];
+    console.error(`ScrapeGraph ${path} failed`, e);
+    return null;
   }
 }
+
+async function findEmailsViaScrapeGraphV2(query: string): Promise<string[]> {
+  const json = await sgaiPost("search", { query, numResults: 2 });
+  return json ? extractEmails(JSON.stringify(json)) : [];
+}
+
+async function scrapePageEmails(url: string): Promise<string[]> {
+  const json = await sgaiPost("scrape", { url, formats: [{ type: "markdown" }, { type: "links" }] }, 15_000);
+  return json ? extractEmails(JSON.stringify(json)) : [];
+}
+
+const PLACEHOLDER = /^(user|name|email|you|your|example|test)@(domain|example|email|yourdomain)\./i;
 
 async function findEmailViaScrapeGraph(
   name: string,
@@ -120,16 +132,26 @@ async function findEmailViaScrapeGraph(
   website: string | null = null,
 ): Promise<string | null> {
   const city = address.split(",").slice(-2).join(",").trim();
-  const site = website ? website.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : "";
   const found = new Set<string>();
-  // Uses ScrapeGraphAI only (no SerpAPI) for the "Find emails" action.
-  const queries = [
-    `${name} ${city}${site ? ` ${site}` : ""} contact email`,
-    `${name} ${city} email gmail OR yahoo OR outlook OR hotmail instagram facebook`,
-  ];
-  if (phone) queries.push(`"${phone}" ${name} email`);
-  const results = await Promise.all(queries.map(findEmailsViaScrapeGraphV2));
-  results.flat().forEach((e) => found.add(e));
+  const add = (list: string[]) => list.filter((e) => !PLACEHOLDER.test(e)).forEach((e) => found.add(e));
+
+  // 1. Business website + contact page (cheap, most reliable).
+  if (website) {
+    const base = (website.startsWith("http") ? website : `https://${website}`).replace(/\/$/, "");
+    for (const u of [base, `${base}/contact`, `${base}/contact-us`]) {
+      add(await scrapePageEmails(u));
+      if (found.size) break;
+    }
+  }
+  // 2. Fallback web searches, one at a time.
+  if (!found.size) {
+    const queries = [`${name} ${city} contact email`, `${name} ${city} email facebook instagram`];
+    if (phone) queries.push(`"${phone}" email`);
+    for (const q of queries) {
+      add(await findEmailsViaScrapeGraphV2(q));
+      if (found.size) break;
+    }
+  }
   const list = await filterDeliverable(Array.from(found).slice(0, 10));
   return list.length ? list.join(", ") : null;
 }
@@ -218,18 +240,21 @@ const leadInput = z.object({
 export const findEmailsServer = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ leads: z.array(leadInput).min(1).max(10) }).parse(d))
   .handler(async ({ data }) => {
-    const results = await Promise.all(
-      data.leads.map(async (r) => {
-        if (r.email) return { id: r.id, email: r.email as string | null };
-        let email: string | null = null;
-        try {
-          email = await findEmailViaScrapeGraph(r.business_name, r.address ?? "", r.phone ?? null, r.website ?? null);
-        } catch (e) {
-          console.error("Email lookup failed", e);
-        }
-        return { id: r.id, email };
-      }),
-    );
+    // Two at a time keeps the free ScrapeGraphAI plan from stalling.
+    const results: { id: string; email: string | null }[] = [];
+    const one = async (r: (typeof data.leads)[number]) => {
+      if (r.email) return { id: r.id, email: r.email as string | null };
+      let email: string | null = null;
+      try {
+        email = await findEmailViaScrapeGraph(r.business_name, r.address ?? "", r.phone ?? null, r.website ?? null);
+      } catch (e) {
+        console.error("Email lookup failed", e);
+      }
+      return { id: r.id, email };
+    };
+    for (let i = 0; i < data.leads.length; i += 2) {
+      results.push(...(await Promise.all(data.leads.slice(i, i + 2).map(one))));
+    }
     return { results };
   });
 
