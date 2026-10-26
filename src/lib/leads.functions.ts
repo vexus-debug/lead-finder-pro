@@ -240,18 +240,21 @@ const leadInput = z.object({
 export const findEmailsServer = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ leads: z.array(leadInput).min(1).max(10) }).parse(d))
   .handler(async ({ data }) => {
-    const results = await Promise.all(
-      data.leads.map(async (r) => {
-        if (r.email) return { id: r.id, email: r.email as string | null };
-        let email: string | null = null;
-        try {
-          email = await findEmailViaScrapeGraph(r.business_name, r.address ?? "", r.phone ?? null, r.website ?? null);
-        } catch (e) {
-          console.error("Email lookup failed", e);
-        }
-        return { id: r.id, email };
-      }),
-    );
+    // Two at a time keeps the free ScrapeGraphAI plan from stalling.
+    const results: { id: string; email: string | null }[] = [];
+    const one = async (r: (typeof data.leads)[number]) => {
+      if (r.email) return { id: r.id, email: r.email as string | null };
+      let email: string | null = null;
+      try {
+        email = await findEmailViaScrapeGraph(r.business_name, r.address ?? "", r.phone ?? null, r.website ?? null);
+      } catch (e) {
+        console.error("Email lookup failed", e);
+      }
+      return { id: r.id, email };
+    };
+    for (let i = 0; i < data.leads.length; i += 2) {
+      results.push(...(await Promise.all(data.leads.slice(i, i + 2).map(one))));
+    }
     return { results };
   });
 
