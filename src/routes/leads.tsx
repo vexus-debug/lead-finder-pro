@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Copy, ExternalLink, Trash2, Download, ArrowUpDown, Search as SearchIcon, Mail, AtSign, Loader2 } from "lucide-react";
 
-import { deleteLeads, findEmailsForLeads, listLeads } from "@/lib/leads.functions";
+import { deleteLeads, findEmailsForLeads, listLeads } from "@/lib/session-store";
 import { exportCSV, exportXLSX, type LeadRow } from "@/lib/export";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,9 +21,9 @@ export const Route = createFileRoute("/leads")({
 type SortKey = "business_name" | "rating" | "reviews" | "created_at";
 
 function LeadsPage() {
-  const fn = useServerFn(listLeads);
-  const delFn = useServerFn(deleteLeads);
-  const findFn = useServerFn(findEmailsForLeads);
+  const fn = listLeads;
+  const delFn = deleteLeads;
+  const findFn = findEmailsForLeads;
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["leads"], queryFn: () => fn() });
 

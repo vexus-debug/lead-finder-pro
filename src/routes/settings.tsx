@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 
-import { getRateLimit } from "@/lib/leads.functions";
+import { getRateLimit } from "@/lib/session-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
@@ -12,7 +11,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const fn = useServerFn(getRateLimit);
+  const fn = getRateLimit;
   const { data } = useQuery({ queryKey: ["rate"], queryFn: () => fn(), refetchInterval: 10000 });
   const r = data ?? { used: 0, remaining: 50, limit: 50 };
 

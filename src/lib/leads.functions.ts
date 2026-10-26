@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const RATE_LIMIT = 50;
+
 
 async function fetchWithRetry(url: string, attempts = 3): Promise<Response> {
   let lastError: unknown;

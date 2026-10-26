@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 
-import { listSearches } from "@/lib/leads.functions";
+import { listSearches } from "@/lib/session-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -12,7 +11,7 @@ export const Route = createFileRoute("/history")({
 });
 
 function HistoryPage() {
-  const fn = useServerFn(listSearches);
+  const fn = listSearches;
   const { data, isLoading } = useQuery({ queryKey: ["searches"], queryFn: () => fn() });
   const rows = data ?? [];
 
