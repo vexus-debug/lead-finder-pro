@@ -192,17 +192,14 @@ async function findEmailViaScrapeGraph(
   const city = address.split(",").slice(-2).join(",").trim();
   const site = website ? website.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : "";
   const found = new Set<string>();
+  // Uses ScrapeGraphAI only (no SerpAPI) for the "Find emails" action.
   const queries = [
-    `"${name}" ${city} email`,
-    `"${name}" ${city} gmail OR yahoo OR outlook OR hotmail`,
+    `${name} ${city}${site ? ` ${site}` : ""} contact email`,
+    `${name} ${city} email gmail OR yahoo OR outlook OR hotmail instagram facebook`,
   ];
-  if (phone) queries.push(`"${phone}" email`);
-  if (site) queries.push(`"@${site}" OR site:${site} email`);
-  const serp = await Promise.all(queries.map(findEmailsViaSerp));
-  serp.flat().forEach((e) => found.add(e));
-  if (found.size === 0) {
-    (await findEmailsViaScrapeGraphV2(`${name} ${city}${site ? ` ${site}` : ""} contact email instagram facebook`)).forEach((e) => found.add(e));
-  }
+  if (phone) queries.push(`"${phone}" ${name} email`);
+  const results = await Promise.all(queries.map(findEmailsViaScrapeGraphV2));
+  results.flat().forEach((e) => found.add(e));
   const list = await filterDeliverable(Array.from(found).slice(0, 10));
   return list.length ? list.join(", ") : null;
 }
